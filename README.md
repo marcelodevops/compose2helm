@@ -1,4 +1,4 @@
-## Scripts to convert docker-compose to helm charts
+##2 Scripts to convert docker-compose to helm charts
 
 Helm charts are more structured than Docker Compose files, but the concepts map fairly well:
 
@@ -37,7 +37,7 @@ volumes:
   db_data:
 ```
 
-## Helm Chart Structure
+#### Helm Chart Structure
 
 ```shell
 mychart/
@@ -93,17 +93,16 @@ Resource limits & probes
 
 
 
-generic converter template so you can drop in your docker-compose.yml and get Helm scaffolding.
 
-Plan
 
-Build a base Helm chart structure (Chart.yaml, values.yaml, templates/)
-
-Create template snippets that map Compose services → Deployments, Services, PVCs
-
-Make it values-driven so you just edit values.yaml instead of modifying manifests
+Improvements
+- generic converter template so you can drop in your docker-compose.yml and get Helm scaffolding.
+- Build a base Helm chart structure (Chart.yaml, values.yaml, templates/)
+- Create template snippets that map Compose services → Deployments, Services, PVCs
+- Make it values-driven so you just edit values.yaml instead of modifying manifests
 
 1. Helm Chart Structure
+```shell
 compose-chart/
   Chart.yaml
   values.yaml
@@ -112,6 +111,7 @@ compose-chart/
     deployment.yaml
     service.yaml
     pvc.yaml
+```
 2. Chart.yaml
 ```yaml
 apiVersion: v2
