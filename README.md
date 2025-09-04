@@ -13,8 +13,8 @@ networks → Kubernetes networking (usually just Services)
 environment variables → Pod env in Deployments
 
 ✅ Example Conversion
-```yaml
 Docker Compose
+```yaml
 version: "3"
 services:
   web:
