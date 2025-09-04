@@ -37,7 +37,9 @@ volumes:
   db_data:
 ```
 
-Helm Chart Structure
+## Helm Chart Structure
+
+```shell
 mychart/
   Chart.yaml
   values.yaml
@@ -48,6 +50,7 @@ mychart/
     service-db.yaml
     pvc-db.yaml
 Chart.yaml
+```
 
 ```yaml
 apiVersion: v2
@@ -72,100 +75,12 @@ db:
   storage: 1Gi
 
 ```
-templates/deployment-web.yaml
-```yaml
+And generates
+- templates/deployment-web.yaml
+- templates/service-web.yaml
+- templates/deployment-db.yaml
+- templates/pvc-db.yaml
 
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ .Release.Name }}-web
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ .Release.Name }}-web
-  template:
-    metadata:
-      labels:
-        app: {{ .Release.Name }}-web
-    spec:
-      containers:
-        - name: web
-          image: {{ .Values.web.image }}
-          ports:
-            - containerPort: {{ .Values.web.port }}
-          env:
-            - name: NGINX_ENV
-              value: {{ .Values.web.env.NGINX_ENV | quote }}
-          volumeMounts:
-            - name: html
-              mountPath: /usr/share/nginx/html
-      volumes:
-        - name: html
-          emptyDir: {}   # replace with PVC if needed
-```
-templates/service-web.yaml
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Release.Name }}-web
-spec:
-  type: ClusterIP
-  ports:
-    - port: {{ .Values.web.port }}
-      targetPort: {{ .Values.web.port }}
-      nodePort: {{ .Values.web.servicePort | default 0 }}
-  selector:
-    app: {{ .Release.Name }}-web
-```
-templates/deployment-db.yaml
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ .Release.Name }}-db
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ .Release.Name }}-db
-  template:
-    metadata:
-      labels:
-        app: {{ .Release.Name }}-db
-    spec:
-      containers:
-        - name: db
-          image: {{ .Values.db.image }}
-          env:
-            - name: POSTGRES_USER
-              value: {{ .Values.db.env.POSTGRES_USER | quote }}
-            - name: POSTGRES_PASSWORD
-              value: {{ .Values.db.env.POSTGRES_PASSWORD | quote }}
-          volumeMounts:
-            - name: db-storage
-              mountPath: /var/lib/postgresql/data
-      volumes:
-        - name: db-storage
-          persistentVolumeClaim:
-            claimName: {{ .Release.Name }}-db-pvc
-```
-templates/pvc-db.yaml
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ .Release.Name }}-db-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.db.storage }}
-      
-```
 This is a basic translation, but you can enhance it with:
 
 ConfigMaps for configs instead of inline env
