@@ -35,7 +35,7 @@ services:
 
 volumes:
   db_data:
-
+```
 
 Helm Chart Structure
 mychart/
@@ -71,7 +71,7 @@ db:
     POSTGRES_PASSWORD: secret
   storage: 1Gi
 
-  ```
+```
 templates/deployment-web.yaml
 ```yaml
 
@@ -204,7 +204,10 @@ name: compose-chart
 description: Generic Helm chart converted from Docker Compose
 version: 0.1.0
 appVersion: "1.0"
+```
 3. values.yaml (example input for multiple services)
+
+```yaml
 services:
   web:
     image: nginx:latest
@@ -272,7 +275,9 @@ spec:
         {{- end }}
 ---
 {{- end }}
+```
 5. templates/service.yaml
+```yaml
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.ports }}
 apiVersion: v1
@@ -294,7 +299,9 @@ spec:
 ---
 {{- end }}
 {{- end }}
+```
 6. templates/pvc.yaml
+```yaml
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.storage }}
 apiVersion: v1
