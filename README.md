@@ -35,6 +35,8 @@ services:
 
 volumes:
   db_data:
+
+
 Helm Chart Structure
 mychart/
   Chart.yaml
@@ -46,6 +48,8 @@ mychart/
     service-db.yaml
     pvc-db.yaml
 Chart.yaml
+
+```yaml
 apiVersion: v2
 name: mychart
 description: A Helm chart converted from Docker Compose
@@ -66,7 +70,11 @@ db:
     POSTGRES_USER: admin
     POSTGRES_PASSWORD: secret
   storage: 1Gi
+
+  ```
 templates/deployment-web.yaml
+```yaml
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -95,7 +103,10 @@ spec:
       volumes:
         - name: html
           emptyDir: {}   # replace with PVC if needed
+```
 templates/service-web.yaml
+
+```yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -108,7 +119,9 @@ spec:
       nodePort: {{ .Values.web.servicePort | default 0 }}
   selector:
     app: {{ .Release.Name }}-web
+```
 templates/deployment-db.yaml
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -138,7 +151,9 @@ spec:
         - name: db-storage
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-db-pvc
+```
 templates/pvc-db.yaml
+```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
