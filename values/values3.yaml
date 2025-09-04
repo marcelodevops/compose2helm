@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:15
+    ports: []
+    env:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD:
+        secretName: "{{ $.Release.Name }}-db-secret"
+        secretKey: POSTGRES_PASSWORD
+      POSTGRES_DB: appdb
+    volumeMounts: []
+    isDatabase: true
+    secrets:
+      POSTGRES_PASSWORD: changeme
+    storage: 5Gi

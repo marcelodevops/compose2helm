@@ -1,0 +1,41 @@
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - containerPort: 80
+        servicePort: 8080
+    env:
+      NGINX_ENV: production
+    volumeMounts:
+      - mountPath: /usr/share/nginx/html
+        subPath: html
+    storage: 1Gi
+
+  db:
+    image: postgres:15
+    env:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+    volumeMounts:
+      - mountPath: /var/lib/postgresql/data
+        subPath: dbdata
+    storage: 5Gi
+    
+  secretProvider: internal   # options: internal | external
+  useExistingSecretStore: true     # <--- new
+  existingSecretStoreRef:
+    kind: ClusterSecretStore       # or SecretStore
+    name: global-vault-store
+  externalSecretStore: vault # optional: vault | aws | gcp  
+
+
+  externalSecretConfig:
+    vault:
+      server: "http://vault.vault:8200"
+      path: "secret/"
+      auth:
+        tokenSecretRef: vault-token
+    aws:
+      region: "us-east-1"
+      auth:
+        secretRef: aws-credentials

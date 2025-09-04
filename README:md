@@ -1,0 +1,178 @@
+Usage
+python compose2helm.py docker-compose.yml ./mychart
+
+🆕 Improvements
+
+Database detection → isDatabase: true added in values.yaml
+
+Generates StatefulSet (with volumeClaimTemplates) instead of Deployment for DBs
+
+Regular services remain Deployments
+
+PVCs skipped for DBs (since StatefulSets already handle PVCs)
+
+
+
+pro
+
+Usage
+python compose2helm.py docker-compose.yml ./mychart
+
+🆕 New Features
+
+Auto-detects databases → StatefulSet with volumeClaimTemplates
+
+Assigns default storage sizes (e.g., postgres → 5Gi)
+
+Injects default env vars (e.g., Postgres gets POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB)
+
+If you already define env vars in Compose, they override the defaults
+
+⚡ Example:
+
+services:
+  db:
+    image: postgres:15
+
+
+Produces in values.yaml:
+
+services:
+  db:
+    image: postgres:15
+    ports: []
+    env:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: appdb
+    volumeMounts: []
+    isDatabase: true
+    storage: 5Gi
+
+###ProMax
+🔧 Example
+
+docker-compose.yml
+
+services:
+  db:
+    image: postgres:15
+
+
+Generated values.yaml
+
+services:
+  db:
+    image: postgres:15
+    ports: []
+    env:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD:
+        secretName: "{{ $.Release.Name }}-db-secret"
+        secretKey: POSTGRES_PASSWORD
+      POSTGRES_DB: appdb
+    volumeMounts: []
+    isDatabase: true
+    secrets:
+      POSTGRES_PASSWORD: changeme
+    storage: 5Gi
+
+
+Generated templates/secrets.yaml
+
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.secrets }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}-secret
+type: Opaque
+stringData:
+  {{- range $key, $val := $svc.secrets }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+---
+{{- end }}
+{{- end }}
+
+🚀 Usage
+
+Install with default password:
+
+helm install mydb ./mychart
+
+
+Override password at install:
+
+helm install mydb ./mychart --set services.db.secrets.POSTGRES_PASSWORD=myStrongPass
+
+
+🔑 New Features
+
+Add a secretProvider option at the root of values.yaml:
+
+secretProvider: internal   # options: internal | external
+externalSecretStore: vault # optional: vault | aws | gcp
+
+
+If secretProvider=internal, we generate templates/secrets.yaml (like now).
+
+If secretProvider=external, we instead generate templates/externalsecret.yaml using the Kubernetes External Secrets
+ API.
+
+
+ 📝 Example Values
+
+Case 1 – Internal Secrets (default)
+
+secretProvider: internal
+
+services:
+  db:
+    image: postgres:15
+    secrets:
+      POSTGRES_PASSWORD: changeme
+
+
+→ Generates Secret in templates/secrets.yaml.
+
+Case 2 – External Secrets (Vault)
+
+secretProvider: external
+externalSecretStore: vault
+
+services:
+  db:
+    image: postgres:15
+    secrets:
+      POSTGRES_PASSWORD: placeholder
+
+
+→ Generates an ExternalSecret in templates/externalsecret.yaml:
+
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: myrelease-db-externalsecret
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: vault
+  target:
+    name: myrelease-db-secret
+  data:
+    - secretKey: POSTGRES_PASSWORD
+      remoteRef:
+        key: myrelease/db/postgres_password
+
+🚀 Usage
+
+Internal secret (Helm-managed):
+
+helm install mydb ./mychart --set services.db.secrets.POSTGRES_PASSWORD=myPass
+
+
+External secret (Vault-managed):
+
+helm install mydb ./mychart --set secretProvider=external --set externalSecretStore=vault

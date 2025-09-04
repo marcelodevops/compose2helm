@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}-web"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "{{ .Release.Name }}-web"
+  template:
+    metadata:
+      labels:
+        app: "{{ .Release.Name }}-web"
+    spec:
+      containers:
+        - name: web
+          image: {{ .Values.web.image }}
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          env:
+            - name: NGINX_ENV
+              value: {{ .Values.web.env.NGINX_ENV | quote }}
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: html
+          emptyDir: {}   # replace with PVC if needed

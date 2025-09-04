@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}-db"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "{{ .Release.Name }}-db"
+  template:
+    metadata:
+      labels:
+        app: "{{ .Release.Name }}-db"
+    spec:
+      containers:
+        - name: db
+          image: {{ .Values.db.image }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.db.env.POSTGRES_USER | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.db.env.POSTGRES_PASSWORD | quote }}
+          volumeMounts:
+            - name: db-storage
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: "{{ .Release.Name }}-db-pvc"

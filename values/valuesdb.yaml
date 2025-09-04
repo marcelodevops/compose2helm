@@ -1,0 +1,11 @@
+services:
+  db:
+    image: postgres:15
+    ports: []
+    env:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: appdb
+    volumeMounts: []
+    isDatabase: true
+    storage: 5Gi
