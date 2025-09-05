@@ -1,4 +1,4 @@
-##2 Scripts to convert docker-compose to helm charts
+## Scripts to convert docker-compose to helm charts
 
 Helm charts are more structured than Docker Compose files, but the concepts map fairly well:
 
