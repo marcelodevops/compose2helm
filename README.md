@@ -851,3 +851,140 @@ services:
 
 
 ```
+For msecurity the Python generator does not read the actual secret file contents, it just notes the file path in values.yaml.
+ This means:
+
+- No sensitive data ends up in your Git repo.
+
+- You (or your CI/CD) provide the actual secret values at helm install or via an external Secret Manager.
+
+- The Helm chart still generates the correct Secret / ExternalSecret objects.
+
+### Example Flow (with placeholders)
+
+docker-compose.yaml
+```yaml
+version: "3.9"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_PASSWORD: supersecret
+  web:
+    image: nginx
+    secrets:
+      - ssl_cert
+      - ssl_key
+
+secrets:
+  ssl_cert:
+    file: ./certs/tls.crt
+  ssl_key:
+    file: ./certs/tls.key
+
+
+```
+
+### Generated values.yaml
+```yaml
+secretProvider: internal
+services:
+  db:
+    image: postgres:15
+    env:
+      POSTGRES_DB: mydb
+    secrets:
+      POSTGRES_PASSWORD: supersecret
+  web:
+    image: nginx
+    secrets:
+      SSL_CERT: "<from-file:./certs/tls.crt>"
+      SSL_KEY: "<from-file:./certs/tls.key>"
+    secretMounts:
+      - name: ssl_cert
+        mountPath: /run/secrets/ssl_cert
+        items:
+          - key: ssl_cert
+            path: ssl_cert
+      - name: ssl_key
+        mountPath: /run/secrets/ssl_key
+        items:
+          - key: ssl_key
+            path: ssl_key
+
+
+```
+
+### Generated. Helm templates
+- Secret (internal provider)
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myrelease-web-secret
+type: Opaque
+stringData:
+  SSL_CERT: "<from-file:./certs/tls.crt>"
+  SSL_KEY: "<from-file:./certs/tls.key>"
+```
+
+- Deployment (mounting secrets as files)
+```yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myrelease-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myrelease-web
+  template:
+    metadata:
+      labels:
+        app: myrelease-web
+    spec:
+      containers:
+        - name: web
+          image: nginx
+          volumeMounts:
+            - name: myrelease-web-secret-ssl_cert
+              mountPath: /run/secrets/ssl_cert
+              readOnly: true
+            - name: myrelease-web-secret-ssl_key
+              mountPath: /run/secrets/ssl_key
+              readOnly: true
+      volumes:
+        - name: myrelease-web-secret-ssl_cert
+          secret:
+            secretName: myrelease-web-secret
+            items:
+              - key: ssl_cert
+                path: ssl_cert
+        - name: myrelease-web-secret-ssl_key
+          secret:
+            secretName: myrelease-web-secret
+            items:
+              - key: ssl_key
+                path: ssl_key
+
+
+```
+### Benefits of Placeholder Approach
+
+- You never commit secret values to git.
+
+- The generator tells you which secrets are expected and where they came from (<from-file:...>).
+
+- You can override at deploy time with:
+```bash
+
+helm install myrelease ./chart \
+  --set services.web.secrets.SSL_CERT="$(cat ./certs/tls.crt)" \
+  --set services.web.secrets.SSL_KEY="$(cat ./certs/tls.key)"
+
+
+```
