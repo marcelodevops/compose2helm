@@ -179,7 +179,7 @@ You can drop in a Docker Compose service definition and just translate its field
 python compose2helm.py docker-compose.yml ./mychart
 ```
 This will create:
-
+```bash
 mychart/
   Chart.yaml
   values.yaml
@@ -187,7 +187,7 @@ mychart/
     deployment.yaml
     service.yaml
     pvc.yaml
-
+```
 
 ⚠️ Limitations:
 
@@ -485,9 +485,9 @@ externalSecretConfig:
 ```
 Script generates:
 
-SecretStore (per provider)
+- SecretStore (per provider)
 
-ExternalSecret (as before)
+- ExternalSecret (as before)
 
 
 📝 Example Values
@@ -698,19 +698,19 @@ existingSecretStoreRef:
 
 How the sectres-store.yaml template works:
 
-- Only renders if:
+Only renders if:
 
-secretProvider: external
+- secretProvider: external
 
-useExistingSecretStore: false
+- useExistingSecretStore: false
 
-- Switches between:
+Switches between:
 
-SecretStore (namespace-scoped, default)
+- SecretStore (namespace-scoped, default)
 
-ClusterSecretStore (cluster-scoped, if externalSecretScope: cluster)
+- ClusterSecretStore (cluster-scoped, if externalSecretScope: cluster)
 
-- Supports vault, aws, and gcp.
+Supports vault, aws, and gcp.
 
 If useExistingSecretStore: true, this template is skipped and your ExternalSecrets will point to the provided existing ref.
 
