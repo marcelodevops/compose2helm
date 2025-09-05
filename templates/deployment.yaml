@@ -38,11 +38,28 @@ spec:
               mountPath: {{ .mountPath }}
               subPath: {{ .subPath | default "" }}
             {{- end }}
+            {{- range $svc.secretMounts }}
+            - name: {{ $.Release.Name }}-{{ $name }}-secret-{{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: true
+            {{- end }}
       volumes:
         {{- if $svc.storage }}
         - name: {{ $.Release.Name }}-{{ $name }}-pvc
           persistentVolumeClaim:
             claimName: {{ $.Release.Name }}-{{ $name }}-pvc
+        {{- end }}
+        {{- range $svc.secretMounts }}
+        - name: {{ $.Release.Name }}-{{ $name }}-secret-{{ .name }}
+          secret:
+            secretName: {{ $.Release.Name }}-{{ $name }}-secret
+            {{- if .items }}
+            items:
+              {{- range .items }}
+              - key: {{ .key }}
+                path: {{ .path }}
+              {{- end }}
+            {{- end }}
         {{- end }}
 ---
 {{- end }}
