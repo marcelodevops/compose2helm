@@ -410,6 +410,65 @@ def write_helm_chart(output_dir, values):
             f.write(content)
 
 
+def parse_compose(compose_file):
+    with open(compose_file) as f:
+        compose = yaml.safe_load(f)
+
+    values = {
+        "secretProvider": "internal",
+        "services": {}
+    }
+
+    # Collect top-level secrets
+    top_secrets = compose.get("secrets", {})
+
+    for name, svc in compose.get("services", {}).items():
+        service_conf = {
+            "image": svc.get("image"),
+            "env": {},
+            "secrets": {},
+            "secretMounts": []
+        }
+
+        # Environment variables
+        for env in svc.get("environment", {}):
+            val = svc["environment"][env]
+            if "PASSWORD" in env or "SECRET" in env or "KEY" in env:
+                # Sensitive: put into Helm secrets
+                service_conf["secrets"][env] = val
+            else:
+                service_conf["env"][env] = val
+
+        # Service-level secrets → mounted as files
+        for sec in svc.get("secrets", []):
+            if isinstance(sec, dict):   # Docker Compose v3 syntax: { source, target }
+                source = sec["source"]
+                mount_path = sec.get("target", f"/run/secrets/{source}")
+            else:  # simple string
+                source = sec
+                mount_path = f"/run/secrets/{source}"
+
+            # Look up secret definition from top-level
+            sec_def = top_secrets.get(source, {})
+            # Default item: key = secret name, path = same
+            service_conf["secretMounts"].append({
+                "name": source,
+                "mountPath": mount_path,
+                "items": [
+                    {"key": source, "path": os.path.basename(mount_path)}
+                ]
+            })
+
+            # If secret is defined from file, we don’t inject the file content
+            # but generate a placeholder in values.yaml
+            if "file" in sec_def:
+                service_conf["secrets"][source.upper()] = f"<from-file:{sec_def['file']}>"
+
+        values["services"][name] = service_conf
+
+    return values
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: python compose2helm.py <docker-compose.yml> <output-dir>")

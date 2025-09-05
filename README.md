@@ -798,3 +798,56 @@ spec:
 ```
 
 Now secrets can be consumed either as env vars or files.
+### Usage 
+docker-compose.yaml
+```yaml
+version: "3.9"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_PASSWORD: supersecret
+  web:
+    image: nginx
+    secrets:
+      - ssl_cert
+      - ssl_key
+
+secrets:
+  ssl_cert:
+    file: ./certs/tls.crt
+  ssl_key:
+    file: ./certs/tls.key
+
+```
+
+Generated values.yaml
+```yaml
+secretProvider: internal
+services:
+  db:
+    image: postgres:15
+    env:
+      POSTGRES_DB: mydb
+    secrets:
+      POSTGRES_PASSWORD: supersecret
+  web:
+    image: nginx
+    secrets:
+      SSL_CERT: "<from-file:./certs/tls.crt>"
+      SSL_KEY: "<from-file:./certs/tls.key>"
+    secretMounts:
+      - name: ssl_cert
+        mountPath: /run/secrets/ssl_cert
+        items:
+          - key: ssl_cert
+            path: ssl_cert
+      - name: ssl_key
+        mountPath: /run/secrets/ssl_key
+        items:
+          - key: ssl_key
+            path: ssl_key
+
+
+```
