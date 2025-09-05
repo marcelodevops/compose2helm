@@ -436,8 +436,8 @@ def parse_compose(compose_file):
         # Environment variables
         for env, val in (svc.get("environment", {}) or {}).items():
             if is_sensitive(env):
-                # Mask sensitive value with placeholder
-                service_conf["secrets"][env] = "<to-be-provided>"
+                # Insert placeholder for auto-generated secrets
+                service_conf["secrets"][env] = "<to-be-generated>"
             else:
                 service_conf["env"][env] = val
 
@@ -460,11 +460,10 @@ def parse_compose(compose_file):
                 ]
             })
 
-            # Placeholder for file-based secrets
             if "file" in sec_def:
                 service_conf["secrets"][source.upper()] = f"<from-file:{sec_def['file']}>"
             else:
-                service_conf["secrets"][source.upper()] = "<to-be-provided>"
+                service_conf["secrets"][source.upper()] = "<to-be-generated>"
 
         values["services"][name] = service_conf
 
