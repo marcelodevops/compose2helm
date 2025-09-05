@@ -81,15 +81,15 @@ And generates
 - templates/deployment-db.yaml
 - templates/pvc-db.yaml
 
-This is a basic translation, but you can enhance it with:
+This is a basic implementation, then enhanced it with:
 
-ConfigMaps for configs instead of inline env
+- ConfigMaps for configs instead of inline env
 
-Ingress instead of NodePort
+- Ingress instead of NodePort
 
-StatefulSet for databases instead of Deployment
+- StatefulSet for databases instead of Deployment
 
-Resource limits & probes
+- Resource limits & probes
 
 
 
@@ -161,19 +161,18 @@ You can drop in a Docker Compose service definition and just translate its field
 
 
 
-Reads your docker-compose.yml
+- Reads your docker-compose.yml
 
-Extracts services, environment variables, ports, volumes
+- Extracts services, environment variables, ports, volumes
 
-Generates:
+- Generates:
 
-values.yaml
+- - values.yaml
 
-Chart.yaml
+- - Chart.yaml
 
-Kubernetes templates (deployment.yaml, service.yaml, pvc.yaml)
+- - Kubernetes templates (deployment.yaml, service.yaml, pvc.yaml)
 
-Working Python script (compose2helm.py):
 
 🔧 Usage
 ```bash
@@ -215,36 +214,37 @@ python compose2helm.py docker-compose.yml ./mychart
 
 ```
 
-🆕 Improvements
-Database detection → isDatabase: true added in values.yaml
+### 🆕 Improvements
+- Database detection → isDatabase: true added in values.yaml
 
-Generates StatefulSet (with volumeClaimTemplates) instead of Deployment for DBs
+- Generates StatefulSet (with volumeClaimTemplates) instead of Deployment for DBs
 
-Regular services remain Deployments
+- Regular services remain Deployments
 
-PVCs skipped for DBs (since StatefulSets already handle PVCs)
+- PVCs skipped for DBs (since StatefulSets already handle PVCs)
 
-Updated plan
 
-Detects common databases (postgres, mysql, mariadb, mongodb, redis, cassandra)
+- Detects common databases (postgres, mysql, mariadb, mongodb, redis, cassandra)
 
-Assigns default storage sizes (e.g., Postgres/MySQL → 5Gi)
+- Assigns default storage sizes (e.g., Postgres/MySQL → 5Gi)
 
-Populates default environment variables if missing (e.g., POSTGRES_USER, POSTGRES_PASSWORD)
+- Populates default environment variables if missing (e.g., POSTGRES_USER, POSTGRES_PASSWORD)
 
 
 
 
 🔧 Usage
+```bash
 python compose2helm.py docker-compose.yml ./mychart
+```
 🆕 New Features
-Auto-detects databases → StatefulSet with volumeClaimTemplates
+- Auto-detects databases → StatefulSet with volumeClaimTemplates
 
-Assigns default storage sizes (e.g., postgres → 5Gi)
+- Assigns default storage sizes (e.g., postgres → 5Gi)
 
-Injects default env vars (e.g., Postgres gets POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB)
+- Injects default env vars (e.g., Postgres gets POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB)
 
-If you already define env vars in Compose, they override the defaults
+- If you already define env vars in Compose, they override the defaults
 
 ⚡ Example:
 ```yaml
@@ -270,25 +270,27 @@ services:
 
 I’ve updated the script so it:
 
-Detects sensitive environment variables (PASSWORD, PASS, SECRET, KEY, etc.)
+- Detects sensitive environment variables (PASSWORD, PASS, SECRET, KEY, etc.)
 
-Moves them into Kubernetes Secrets
+- Moves them into Kubernetes Secrets
 
-Replaces their values with valueFrom.secretKeyRef in Deployments/StatefulSets
+- Replaces their values with valueFrom.secretKeyRef in Deployments/StatefulSets
 
-Writes a templates/secrets.yaml file with all secrets
+- Writes a templates/secrets.yaml file with all secrets
 
 
 🔧 Usage
+```bash
 python compose2helm.py docker-compose.yml ./mychart
+```
 🆕 What Changed
-Detects sensitive vars → generates templates/secrets.yaml
+- Detects sensitive vars → generates templates/secrets.yaml
 
-Deployments/StatefulSets reference secrets with valueFrom.secretKeyRef
+- Deployments/StatefulSets reference secrets with valueFrom.secretKeyRef
 
-Passwords and tokens are not stored in values.yaml
+- Passwords and tokens are not stored in values.yaml
 
-⚡ Example with Postgres:
+### ⚡ Example with Postgres:
 ```yaml
 services:
   db:
