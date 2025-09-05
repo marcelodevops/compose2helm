@@ -409,6 +409,10 @@ def write_helm_chart(output_dir, values):
         with open(path, "w") as f:
             f.write(content)
 
+SENSITIVE_KEYS = ["PASSWORD", "SECRET", "KEY", "TOKEN"]
+
+def is_sensitive(key: str) -> bool:
+    return any(word in key.upper() for word in SENSITIVE_KEYS)
 
 def parse_compose(compose_file):
     with open(compose_file) as f:
@@ -419,7 +423,6 @@ def parse_compose(compose_file):
         "services": {}
     }
 
-    # Collect top-level secrets
     top_secrets = compose.get("secrets", {})
 
     for name, svc in compose.get("services", {}).items():
@@ -431,26 +434,24 @@ def parse_compose(compose_file):
         }
 
         # Environment variables
-        for env in svc.get("environment", {}):
-            val = svc["environment"][env]
-            if "PASSWORD" in env or "SECRET" in env or "KEY" in env:
-                # Sensitive: put into Helm secrets
-                service_conf["secrets"][env] = val
+        for env, val in (svc.get("environment", {}) or {}).items():
+            if is_sensitive(env):
+                # Mask sensitive value with placeholder
+                service_conf["secrets"][env] = "<to-be-provided>"
             else:
                 service_conf["env"][env] = val
 
         # Service-level secrets → mounted as files
         for sec in svc.get("secrets", []):
-            if isinstance(sec, dict):   # Docker Compose v3 syntax: { source, target }
+            if isinstance(sec, dict):
                 source = sec["source"]
                 mount_path = sec.get("target", f"/run/secrets/{source}")
-            else:  # simple string
+            else:
                 source = sec
                 mount_path = f"/run/secrets/{source}"
 
-            # Look up secret definition from top-level
             sec_def = top_secrets.get(source, {})
-            # Default item: key = secret name, path = same
+
             service_conf["secretMounts"].append({
                 "name": source,
                 "mountPath": mount_path,
@@ -459,14 +460,16 @@ def parse_compose(compose_file):
                 ]
             })
 
-            # If secret is defined from file, we don’t inject the file content
-            # but generate a placeholder in values.yaml
+            # Placeholder for file-based secrets
             if "file" in sec_def:
                 service_conf["secrets"][source.upper()] = f"<from-file:{sec_def['file']}>"
+            else:
+                service_conf["secrets"][source.upper()] = "<to-be-provided>"
 
         values["services"][name] = service_conf
 
     return values
+
 
 
 if __name__ == "__main__":
