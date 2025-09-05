@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   name: {{ $.Release.Name }}-{{ $name }}
 spec:
-  replicas: 1
+  replicas: {{ $svc.replicas | default 1 }}
   selector:
     matchLabels:
       app: {{ $.Release.Name }}-{{ $name }}
@@ -21,10 +21,17 @@ spec:
             - containerPort: {{ .containerPort }}
             {{- end }}
           env:
+            {{- if $svc.env }}
             {{- range $key, $val := $svc.env }}
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            {{- end }}
+          {{- if $svc.secrets }}
+          envFrom:
+            - secretRef:
+                name: {{ $.Release.Name }}-{{ $name }}-secret
+          {{- end }}
           volumeMounts:
             {{- range $svc.volumeMounts }}
             - name: {{ $.Release.Name }}-{{ $name }}-pvc
