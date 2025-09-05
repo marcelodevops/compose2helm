@@ -750,8 +750,13 @@ services:
     image: postgres:15
     secrets:
       POSTGRES_PASSWORD: placeholder
-    env:
-      POSTGRES_DB: mydb
+    secretMounts:
+      - name: db-secret-files
+        mountPath: /etc/db-secrets
+        items:
+          - key: POSTGRES_PASSWORD
+            path: password.txt
+
 
 
 ```
@@ -775,10 +780,21 @@ spec:
       containers:
         - name: db
           image: postgres:15
-          env:
-            - name: POSTGRES_DB
-              value: "mydb"
           envFrom:
             - secretRef:
                 name: myrelease-db-secret
+          volumeMounts:
+            - name: myrelease-db-secret-db-secret-files
+              mountPath: /etc/db-secrets
+              readOnly: true
+      volumes:
+        - name: myrelease-db-secret-db-secret-files
+          secret:
+            secretName: myrelease-db-secret
+            items:
+              - key: POSTGRES_PASSWORD
+                path: password.txt
+
 ```
+
+Now secrets can be consumed either as env vars or files.
