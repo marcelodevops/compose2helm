@@ -49,8 +49,8 @@ mychart/
     deployment-db.yaml
     service-db.yaml
     pvc-db.yaml
-Chart.yaml
 ```
+Chart.yaml
 
 ```yaml
 apiVersion: v2
