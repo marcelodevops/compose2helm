@@ -988,3 +988,124 @@ helm install myrelease ./chart \
 
 
 ```
+An improvement
+
+- Sensitive env vars (*PASSWORD*, *SECRET*, *KEY*, *TOKEN*, etc.) are detected.
+
+- Instead of dumping their raw value into values.yaml, we insert a placeholder (e.g. <to-be-provided>).
+
+- You then provide the actual value at install time via --set or a separate values-secret.yaml.
+
+### Example
+
+docker-compose.yaml 
+```yaml
+
+version: "3.9"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_PASSWORD: hardcoded-secret
+  web:
+    image: nginx
+    secrets:
+      - ssl_cert
+      - ssl_key
+
+secrets:
+  ssl_cert:
+    file: ./certs/tls.crt
+  ssl_key:
+    file: ./certs/tls.key
+
+```
+
+Generated values.yaml
+
+```yaml
+
+secretProvider: internal
+services:
+  db:
+    image: postgres:15
+    env:
+      POSTGRES_DB: mydb
+    secrets:
+      POSTGRES_PASSWORD: "<to-be-provided>"
+  web:
+    image: nginx
+    secrets:
+      SSL_CERT: "<from-file:./certs/tls.crt>"
+      SSL_KEY: "<from-file:./certs/tls.key>"
+    secretMounts:
+      - name: ssl_cert
+        mountPath: /run/secrets/ssl_cert
+        items:
+          - key: ssl_cert
+            path: ssl_cert
+      - name: ssl_key
+        mountPath: /run/secrets/ssl_key
+        items:
+          - key: ssl_key
+            path: ssl_key
+
+```
+Hardcoded sensitive values in Compose (like POSTGRES_PASSWORD: hardcoded-secret) won’t ever make it into values.yaml.
+
+Instead, you explicitly provide them at deploy time:
+```bash
+
+
+helm install myrelease ./chart \
+  --set services.db.secrets.POSTGRES_PASSWORD="$(openssl rand -hex 16)"
+
+
+```
+
+Also it generates a password at install time if no value is provided
+
+### Example values.yaml
+
+```yaml
+services:
+  db:
+    image: postgres:15
+    env:
+      POSTGRES_DB: mydb
+    secrets:
+      POSTGRES_PASSWORD: "<to-be-generated>"
+  web:
+    image: nginx
+    secrets:
+      SSL_CERT: "<from-file:./certs/tls.crt>"
+      SSL_KEY: "<from-file:./certs/tls.key>"
+```
+Generated secret
+```yaml
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myrelease-db-secret
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "k8G4s9FjQ2tY1xPv"  # auto-generated
+
+
+```
+
+- If the user overrides via --set services.db.secrets.POSTGRES_PASSWORD=..., that value is used.
+
+- Otherwise Helm generates a random 16-character alphanumeric password.
+
+### Improvements
+
+- Sensitive passwords are never hard-coded in values.yaml.
+
+- Secrets are auto-generated if missing.
+
+- Supports both env vars and file mounts.
+
+- Compatible with internal Helm secrets or ExternalSecrets / Vault / AWS.
