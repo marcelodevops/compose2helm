@@ -728,3 +728,11 @@ And external.secrets.yaml template
 - Creates a Kubernetes Secret (target.name) for each service to mount/use.
 
 - Secret keys are normalized to release/service/key format for external reference.
+
+
+Updated features.
+- If a service has secrets defined → they’ll be injected as envFrom.secretRef instead of plain-text values.
+
+- Normal non-sensitive env vars still get injected as before.
+
+- This way, the container automatically consumes secrets from ExternalSecret / Secret.
