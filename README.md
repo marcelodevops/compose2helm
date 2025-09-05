@@ -728,3 +728,57 @@ And external.secrets.yaml template
 - Creates a Kubernetes Secret (target.name) for each service to mount/use.
 
 - Secret keys are normalized to release/service/key format for external reference.
+
+
+Updated features.
+- If a service has secrets defined → they’ll be injected as envFrom.secretRef instead of plain-text values.
+
+- Normal non-sensitive env vars still get injected as before.
+
+- This way, the container automatically consumes secrets from ExternalSecret / Secret.
+
+- Plain env vars (safe) → .env section.
+
+- Sensitive vars (secrets) → referenced automatically from generated Secret or ExternalSecret.
+
+### Usasge
+values.yaml
+```yaml
+
+services:
+  db:
+    image: postgres:15
+    secrets:
+      POSTGRES_PASSWORD: placeholder
+    env:
+      POSTGRES_DB: mydb
+
+
+```
+
+Generated deployment
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myrelease-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myrelease-db
+  template:
+    metadata:
+      labels:
+        app: myrelease-db
+    spec:
+      containers:
+        - name: db
+          image: postgres:15
+          env:
+            - name: POSTGRES_DB
+              value: "mydb"
+          envFrom:
+            - secretRef:
+                name: myrelease-db-secret
+```
