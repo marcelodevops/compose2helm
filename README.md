@@ -101,7 +101,7 @@ Improvements
 - Create template snippets that map Compose services → Deployments, Services, PVCs
 - Make it values-driven so you just edit values.yaml instead of modifying manifests
 
-1. Helm Chart Structure
+### Helm Chart Structure
 ```shell
 compose-chart/
   Chart.yaml
@@ -112,7 +112,7 @@ compose-chart/
     service.yaml
     pvc.yaml
 ```
-2. Chart.yaml
+### Chart.yaml
 ```yaml
 apiVersion: v2
 name: compose-chart
@@ -120,7 +120,7 @@ description: Generic Helm chart converted from Docker Compose
 version: 0.1.0
 appVersion: "1.0"
 ```
-3. values.yaml (example input for multiple services)
+### values.yaml (example input for multiple services)
 
 ```yaml
 services:
@@ -146,94 +146,11 @@ services:
         subPath: dbdata
     storage: 5Gi
 ```
-4. templates/deployment.yaml
-```yaml
+### Generates
+1. templates/deployment.yaml
+2. templates/service.yaml
+3. templates/pvc.yaml
 
-{{- range $name, $svc := .Values.services }}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-pvc
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-      volumes:
-        {{- if $svc.storage }}
-        - name: {{ $.Release.Name }}-{{ $name }}-pvc
-          persistentVolumeClaim:
-            claimName: {{ $.Release.Name }}-{{ $name }}-pvc
-        {{- end }}
----
-{{- end }}
-```
-5. templates/service.yaml
-```yaml
-{{- range $name, $svc := .Values.services }}
-{{- if $svc.ports }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  type: ClusterIP
-  ports:
-    {{- range $svc.ports }}
-    - port: {{ .containerPort }}
-      targetPort: {{ .containerPort }}
-      {{- if .servicePort }}
-      nodePort: {{ .servicePort }}
-      {{- end }}
-    {{- end }}
-  selector:
-    app: {{ $.Release.Name }}-{{ $name }}
----
-{{- end }}
-{{- end }}
-```
-6. templates/pvc.yaml
-```yaml
-{{- range $name, $svc := .Values.services }}
-{{- if $svc.storage }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ $svc.storage }}
----
-{{- end }}
-{{- end }}
-
-```
 ✅ With this setup:
 
 You only edit values.yaml to add services.
@@ -315,302 +232,7 @@ Assigns default storage sizes (e.g., Postgres/MySQL → 5Gi)
 
 Populates default environment variables if missing (e.g., POSTGRES_USER, POSTGRES_PASSWORD)
 
-Here’s the updated compose2helm.py:
-```python
 
-import os
-import sys
-import yaml
-
-# Database detection and defaults
-DB_DEFAULTS = {
-    "postgres": {
-        "storage": "5Gi",
-        "env": {
-            "POSTGRES_USER": "admin",
-            "POSTGRES_PASSWORD": "changeme",
-            "POSTGRES_DB": "appdb"
-        }
-    },
-    "mysql": {
-        "storage": "5Gi",
-        "env": {
-            "MYSQL_ROOT_PASSWORD": "changeme",
-            "MYSQL_DATABASE": "appdb",
-            "MYSQL_USER": "admin",
-            "MYSQL_PASSWORD": "changeme"
-        }
-    },
-    "mariadb": {
-        "storage": "5Gi",
-        "env": {
-            "MARIADB_ROOT_PASSWORD": "changeme",
-            "MARIADB_DATABASE": "appdb",
-            "MARIADB_USER": "admin",
-            "MARIADB_PASSWORD": "changeme"
-        }
-    },
-    "mongodb": {
-        "storage": "5Gi",
-        "env": {
-            "MONGO_INITDB_ROOT_USERNAME": "admin",
-            "MONGO_INITDB_ROOT_PASSWORD": "changeme"
-        }
-    },
-    "redis": {
-        "storage": "1Gi",
-        "env": {}
-    },
-    "cassandra": {
-        "storage": "10Gi",
-        "env": {
-            "CASSANDRA_USER": "admin",
-            "CASSANDRA_PASSWORD": "changeme"
-        }
-    }
-}
-
-BASE_HELM = {
-    "Chart.yaml": """apiVersion: v2
-name: compose-chart
-description: Generic Helm chart converted from Docker Compose
-version: 0.3.0
-appVersion: "1.0"
-""",
-    "templates/deployment.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if not $svc.isDatabase }}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-pvc
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-      volumes:
-        {{- if $svc.storage }}
-        - name: {{ $.Release.Name }}-{{ $name }}-pvc
-          persistentVolumeClaim:
-            claimName: {{ $.Release.Name }}-{{ $name }}-pvc
-        {{- end }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/statefulset.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.isDatabase }}
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  serviceName: {{ $.Release.Name }}-{{ $name }}
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-storage
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-  volumeClaimTemplates:
-    {{- if $svc.storage }}
-    - metadata:
-        name: {{ $.Release.Name }}-{{ $name }}-storage
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: {{ $svc.storage }}
-    {{- end }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/service.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.ports }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  type: ClusterIP
-  ports:
-    {{- range $svc.ports }}
-    - port: {{ .containerPort }}
-      targetPort: {{ .containerPort }}
-      {{- if .servicePort }}
-      nodePort: {{ .servicePort }}
-      {{- end }}
-    {{- end }}
-  selector:
-    app: {{ $.Release.Name }}-{{ $name }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/pvc.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if and $svc.storage (not $svc.isDatabase) }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ $svc.storage }}
----
-{{- end }}
-{{- end }}
-"""
-}
-
-
-def docker_compose_to_values(compose_file):
-    with open(compose_file, "r") as f:
-        compose = yaml.safe_load(f)
-
-    services = {}
-    for name, svc in compose.get("services", {}).items():
-        image = svc.get("image", "")
-        image_lower = image.lower()
-        matched_db = next((db for db in DB_DEFAULTS if db in image_lower), None)
-        is_db = matched_db is not None
-
-        service_entry = {
-            "image": image,
-            "ports": [],
-            "env": {},
-            "volumeMounts": [],
-            "isDatabase": is_db,
-        }
-
-        # Ports
-        for p in svc.get("ports", []):
-            if isinstance(p, str):
-                if ":" in p:
-                    host, container = p.split(":")
-                    service_entry["ports"].append({
-                        "containerPort": int(container),
-                        "servicePort": int(host)
-                    })
-                else:
-                    service_entry["ports"].append({"containerPort": int(p)})
-            elif isinstance(p, int):
-                service_entry["ports"].append({"containerPort": p})
-
-        # Environment
-        env = svc.get("environment", {})
-        if isinstance(env, list):  # ["A=1", "B=2"]
-            for e in env:
-                k, v = e.split("=", 1)
-                service_entry["env"][k] = v
-        elif isinstance(env, dict):
-            service_entry["env"] = env
-
-        # Volumes
-        for v in svc.get("volumes", []):
-            if isinstance(v, str):
-                parts = v.split(":")
-                if len(parts) == 2:
-                    host, container = parts
-                    service_entry["volumeMounts"].append({
-                        "mountPath": container,
-                        "subPath": os.path.basename(host)
-                    })
-                    if "storage" not in service_entry:
-                        service_entry["storage"] = "1Gi"
-                else:
-                    service_entry["volumeMounts"].append({"mountPath": v})
-
-        # Database defaults
-        if matched_db:
-            db_defaults = DB_DEFAULTS[matched_db]
-            service_entry.setdefault("storage", db_defaults["storage"])
-            # merge env with defaults (user values override defaults)
-            for k, v in db_defaults["env"].items():
-                service_entry["env"].setdefault(k, v)
-
-        services[name] = service_entry
-
-    return {"services": services}
-
-
-def write_helm_chart(output_dir, values):
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "templates"), exist_ok=True)
-
-    # values.yaml
-    with open(os.path.join(output_dir, "values.yaml"), "w") as f:
-        yaml.dump(values, f, default_flow_style=False, sort_keys=False)
-
-    # static files
-    for filename, content in BASE_HELM.items():
-        path = os.path.join(output_dir, filename)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(content)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python compose2helm.py <docker-compose.yml> <output-dir>")
-        sys.exit(1)
-
-    compose_file = sys.argv[1]
-    output_dir = sys.argv[2]
-
-    values = docker_compose_to_values(compose_file)
-    write_helm_chart(output_dir, values)
-    print(f"✅ Helm chart generated in {output_dir}")
-
-
-```
 
 
 🔧 Usage
@@ -656,349 +278,6 @@ Replaces their values with valueFrom.secretKeyRef in Deployments/StatefulSets
 
 Writes a templates/secrets.yaml file with all secrets
 
-Here’s the new compose2helm.py:
-```python
-
-import os
-import sys
-import yaml
-import re
-
-# Sensitive env var detection
-SENSITIVE_PATTERNS = re.compile(r"(PASSWORD|PASS|SECRET|KEY|TOKEN)", re.IGNORECASE)
-
-# Database detection and defaults
-DB_DEFAULTS = {
-    "postgres": {
-        "storage": "5Gi",
-        "env": {
-            "POSTGRES_USER": "admin",
-            "POSTGRES_PASSWORD": "changeme",
-            "POSTGRES_DB": "appdb"
-        }
-    },
-    "mysql": {
-        "storage": "5Gi",
-        "env": {
-            "MYSQL_ROOT_PASSWORD": "changeme",
-            "MYSQL_DATABASE": "appdb",
-            "MYSQL_USER": "admin",
-            "MYSQL_PASSWORD": "changeme"
-        }
-    },
-    "mariadb": {
-        "storage": "5Gi",
-        "env": {
-            "MARIADB_ROOT_PASSWORD": "changeme",
-            "MARIADB_DATABASE": "appdb",
-            "MARIADB_USER": "admin",
-            "MARIADB_PASSWORD": "changeme"
-        }
-    },
-    "mongodb": {
-        "storage": "5Gi",
-        "env": {
-            "MONGO_INITDB_ROOT_USERNAME": "admin",
-            "MONGO_INITDB_ROOT_PASSWORD": "changeme"
-        }
-    },
-    "redis": {
-        "storage": "1Gi",
-        "env": {}
-    },
-    "cassandra": {
-        "storage": "10Gi",
-        "env": {
-            "CASSANDRA_USER": "admin",
-            "CASSANDRA_PASSWORD": "changeme"
-        }
-    }
-}
-
-BASE_HELM = {
-    "Chart.yaml": """apiVersion: v2
-name: compose-chart
-description: Generic Helm chart converted from Docker Compose
-version: 0.4.0
-appVersion: "1.0"
-""",
-    "templates/deployment.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if not $svc.isDatabase }}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            {{- if $val.secretName }}
-            - name: {{ $key }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $val.secretName }}
-                  key: {{ $val.secretKey }}
-            {{- else }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-pvc
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-      volumes:
-        {{- if $svc.storage }}
-        - name: {{ $.Release.Name }}-{{ $name }}-pvc
-          persistentVolumeClaim:
-            claimName: {{ $.Release.Name }}-{{ $name }}-pvc
-        {{- end }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/statefulset.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.isDatabase }}
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  serviceName: {{ $.Release.Name }}-{{ $name }}
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            {{- if $val.secretName }}
-            - name: {{ $key }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $val.secretName }}
-                  key: {{ $val.secretKey }}
-            {{- else }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-storage
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-  volumeClaimTemplates:
-    {{- if $svc.storage }}
-    - metadata:
-        name: {{ $.Release.Name }}-{{ $name }}-storage
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: {{ $svc.storage }}
-    {{- end }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/service.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.ports }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  type: ClusterIP
-  ports:
-    {{- range $svc.ports }}
-    - port: {{ .containerPort }}
-      targetPort: {{ .containerPort }}
-      {{- if .servicePort }}
-      nodePort: {{ .servicePort }}
-      {{- end }}
-    {{- end }}
-  selector:
-    app: {{ $.Release.Name }}-{{ $name }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/pvc.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if and $svc.storage (not $svc.isDatabase) }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ $svc.storage }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/secrets.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.secrets }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-secret
-type: Opaque
-stringData:
-  {{- range $key, $val := $svc.secrets }}
-  {{ $key }}: {{ $val | quote }}
-  {{- end }}
----
-{{- end }}
-{{- end }}
-"""
-}
-
-
-def docker_compose_to_values(compose_file):
-    with open(compose_file, "r") as f:
-        compose = yaml.safe_load(f)
-
-    services = {}
-    for name, svc in compose.get("services", {}).items():
-        image = svc.get("image", "")
-        image_lower = image.lower()
-        matched_db = next((db for db in DB_DEFAULTS if db in image_lower), None)
-        is_db = matched_db is not None
-
-        service_entry = {
-            "image": image,
-            "ports": [],
-            "env": {},
-            "volumeMounts": [],
-            "isDatabase": is_db,
-            "secrets": {}
-        }
-
-        # Ports
-        for p in svc.get("ports", []):
-            if isinstance(p, str):
-                if ":" in p:
-                    host, container = p.split(":")
-                    service_entry["ports"].append({
-                        "containerPort": int(container),
-                        "servicePort": int(host)
-                    })
-                else:
-                    service_entry["ports"].append({"containerPort": int(p)})
-            elif isinstance(p, int):
-                service_entry["ports"].append({"containerPort": p})
-
-        # Environment
-        env = svc.get("environment", {})
-        if isinstance(env, list):  # ["A=1", "B=2"]
-            for e in env:
-                k, v = e.split("=", 1)
-                env[k] = v
-
-        if isinstance(env, dict):
-            for k, v in env.items():
-                if SENSITIVE_PATTERNS.search(k):
-                    secret_name = f"{{{{ $.Release.Name }}}}-{name}-secret"
-                    service_entry["env"][k] = {"secretName": secret_name, "secretKey": k}
-                    service_entry["secrets"][k] = v
-                else:
-                    service_entry["env"][k] = v
-
-        # Volumes
-        for v in svc.get("volumes", []):
-            if isinstance(v, str):
-                parts = v.split(":")
-                if len(parts) == 2:
-                    host, container = parts
-                    service_entry["volumeMounts"].append({
-                        "mountPath": container,
-                        "subPath": os.path.basename(host)
-                    })
-                    if "storage" not in service_entry:
-                        service_entry["storage"] = "1Gi"
-                else:
-                    service_entry["volumeMounts"].append({"mountPath": v})
-
-        # Database defaults
-        if matched_db:
-            db_defaults = DB_DEFAULTS[matched_db]
-            service_entry.setdefault("storage", db_defaults["storage"])
-            for k, v in db_defaults["env"].items():
-                if SENSITIVE_PATTERNS.search(k):
-                    secret_name = f"{{{{ $.Release.Name }}}}-{name}-secret"
-                    service_entry["env"].setdefault(k, {"secretName": secret_name, "secretKey": k})
-                    service_entry["secrets"].setdefault(k, v)
-                else:
-                    service_entry["env"].setdefault(k, v)
-
-        services[name] = service_entry
-
-    return {"services": services}
-
-
-def write_helm_chart(output_dir, values):
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "templates"), exist_ok=True)
-
-    # values.yaml
-    with open(os.path.join(output_dir, "values.yaml"), "w") as f:
-        yaml.dump(values, f, default_flow_style=False, sort_keys=False)
-
-    # static files
-    for filename, content in BASE_HELM.items():
-        path = os.path.join(output_dir, filename)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(content)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python compose2helm.py <docker-compose.yml> <output-dir>")
-        sys.exit(1)
-
-    compose_file = sys.argv[1]
-    output_dir = sys.argv[2]
-
-    values = docker_compose_to_values(compose_file)
-    write_helm_chart(output_dir, values)
-    print(f"✅ Helm chart with Secrets generated in {output_dir}")
-
-
-```
 
 🔧 Usage
 python compose2helm.py docker-compose.yml ./mychart
@@ -1031,7 +310,9 @@ services:
     secrets:
       POSTGRES_PASSWORD: changeme
     storage: 5Gi
+```
 And templates/secrets.yaml:
+```yaml
 
 apiVersion: v1
 kind: Secret
@@ -1052,353 +333,14 @@ Reference those values in the Helm template with stringData:
 
 Allow overrides at install/upgrade time via --set services.db.secrets.POSTGRES_PASSWORD=supersecret
 
-Here’s the extended script (compose2helm.py):
-```python
 
 
-import os
-import sys
-import yaml
-import re
-
-# Sensitive env var detection
-SENSITIVE_PATTERNS = re.compile(r"(PASSWORD|PASS|SECRET|KEY|TOKEN)", re.IGNORECASE)
-
-# Database detection and defaults
-DB_DEFAULTS = {
-    "postgres": {
-        "storage": "5Gi",
-        "env": {
-            "POSTGRES_USER": "admin",
-            "POSTGRES_PASSWORD": "changeme",
-            "POSTGRES_DB": "appdb"
-        }
-    },
-    "mysql": {
-        "storage": "5Gi",
-        "env": {
-            "MYSQL_ROOT_PASSWORD": "changeme",
-            "MYSQL_DATABASE": "appdb",
-            "MYSQL_USER": "admin",
-            "MYSQL_PASSWORD": "changeme"
-        }
-    },
-    "mariadb": {
-        "storage": "5Gi",
-        "env": {
-            "MARIADB_ROOT_PASSWORD": "changeme",
-            "MARIADB_DATABASE": "appdb",
-            "MARIADB_USER": "admin",
-            "MARIADB_PASSWORD": "changeme"
-        }
-    },
-    "mongodb": {
-        "storage": "5Gi",
-        "env": {
-            "MONGO_INITDB_ROOT_USERNAME": "admin",
-            "MONGO_INITDB_ROOT_PASSWORD": "changeme"
-        }
-    },
-    "redis": {
-        "storage": "1Gi",
-        "env": {}
-    },
-    "cassandra": {
-        "storage": "10Gi",
-        "env": {
-            "CASSANDRA_USER": "admin",
-            "CASSANDRA_PASSWORD": "changeme"
-        }
-    }
-}
-
-BASE_HELM = {
-    "Chart.yaml": """apiVersion: v2
-name: compose-chart
-description: Generic Helm chart converted from Docker Compose
-version: 0.5.0
-appVersion: "1.0"
-""",
-    "templates/deployment.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if not $svc.isDatabase }}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            {{- if $val.secretName }}
-            - name: {{ $key }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $val.secretName }}
-                  key: {{ $val.secretKey }}
-            {{- else }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-pvc
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-      volumes:
-        {{- if $svc.storage }}
-        - name: {{ $.Release.Name }}-{{ $name }}-pvc
-          persistentVolumeClaim:
-            claimName: {{ $.Release.Name }}-{{ $name }}-pvc
-        {{- end }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/statefulset.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.isDatabase }}
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  serviceName: {{ $.Release.Name }}-{{ $name }}
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ $.Release.Name }}-{{ $name }}
-  template:
-    metadata:
-      labels:
-        app: {{ $.Release.Name }}-{{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: {{ $svc.image }}
-          ports:
-            {{- range $svc.ports }}
-            - containerPort: {{ .containerPort }}
-            {{- end }}
-          env:
-            {{- range $key, $val := $svc.env }}
-            {{- if $val.secretName }}
-            - name: {{ $key }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $val.secretName }}
-                  key: {{ $val.secretKey }}
-            {{- else }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
-            {{- end }}
-          volumeMounts:
-            {{- range $svc.volumeMounts }}
-            - name: {{ $.Release.Name }}-{{ $name }}-storage
-              mountPath: {{ .mountPath }}
-              subPath: {{ .subPath | default "" }}
-            {{- end }}
-  volumeClaimTemplates:
-    {{- if $svc.storage }}
-    - metadata:
-        name: {{ $.Release.Name }}-{{ $name }}-storage
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: {{ $svc.storage }}
-    {{- end }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/service.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.ports }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}
-spec:
-  type: ClusterIP
-  ports:
-    {{- range $svc.ports }}
-    - port: {{ .containerPort }}
-      targetPort: {{ .containerPort }}
-      {{- if .servicePort }}
-      nodePort: {{ .servicePort }}
-      {{- end }}
-    {{- end }}
-  selector:
-    app: {{ $.Release.Name }}-{{ $name }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/pvc.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if and $svc.storage (not $svc.isDatabase) }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ $svc.storage }}
----
-{{- end }}
-{{- end }}
-""",
-    "templates/secrets.yaml": """{{- range $name, $svc := .Values.services }}
-{{- if $svc.secrets }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-secret
-type: Opaque
-stringData:
-  {{- range $key, $val := $svc.secrets }}
-  {{ $key }}: {{ $val | quote }}
-  {{- end }}
----
-{{- end }}
-{{- end }}
-"""
-}
 
 
-def docker_compose_to_values(compose_file):
-    with open(compose_file, "r") as f:
-        compose = yaml.safe_load(f)
-
-    services = {}
-    for name, svc in compose.get("services", {}).items():
-        image = svc.get("image", "")
-        image_lower = image.lower()
-        matched_db = next((db for db in DB_DEFAULTS if db in image_lower), None)
-        is_db = matched_db is not None
-
-        service_entry = {
-            "image": image,
-            "ports": [],
-            "env": {},
-            "volumeMounts": [],
-            "isDatabase": is_db,
-            "secrets": {}
-        }
-
-        # Ports
-        for p in svc.get("ports", []):
-            if isinstance(p, str):
-                if ":" in p:
-                    host, container = p.split(":")
-                    service_entry["ports"].append({
-                        "containerPort": int(container),
-                        "servicePort": int(host)
-                    })
-                else:
-                    service_entry["ports"].append({"containerPort": int(p)})
-            elif isinstance(p, int):
-                service_entry["ports"].append({"containerPort": p})
-
-        # Environment
-        env = svc.get("environment", {})
-        if isinstance(env, list):  # ["A=1", "B=2"]
-            for e in env:
-                k, v = e.split("=", 1)
-                env[k] = v
-
-        if isinstance(env, dict):
-            for k, v in env.items():
-                if SENSITIVE_PATTERNS.search(k):
-                    secret_name = f"{{{{ $.Release.Name }}}}-{name}-secret"
-                    service_entry["env"][k] = {"secretName": secret_name, "secretKey": k}
-                    service_entry["secrets"][k] = v
-                else:
-                    service_entry["env"][k] = v
-
-        # Volumes
-        for v in svc.get("volumes", []):
-            if isinstance(v, str):
-                parts = v.split(":")
-                if len(parts) == 2:
-                    host, container = parts
-                    service_entry["volumeMounts"].append({
-                        "mountPath": container,
-                        "subPath": os.path.basename(host)
-                    })
-                    if "storage" not in service_entry:
-                        service_entry["storage"] = "1Gi"
-                else:
-                    service_entry["volumeMounts"].append({"mountPath": v})
-
-        # Database defaults
-        if matched_db:
-            db_defaults = DB_DEFAULTS[matched_db]
-            service_entry.setdefault("storage", db_defaults["storage"])
-            for k, v in db_defaults["env"].items():
-                if SENSITIVE_PATTERNS.search(k):
-                    secret_name = f"{{{{ $.Release.Name }}}}-{name}-secret"
-                    service_entry["env"].setdefault(k, {"secretName": secret_name, "secretKey": k})
-                    service_entry["secrets"].setdefault(k, v)
-                else:
-                    service_entry["env"].setdefault(k, v)
-
-        services[name] = service_entry
-
-    return {"services": services}
-
-
-def write_helm_chart(output_dir, values):
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "templates"), exist_ok=True)
-
-    # values.yaml
-    with open(os.path.join(output_dir, "values.yaml"), "w") as f:
-        yaml.dump(values, f, default_flow_style=False, sort_keys=False)
-
-    # templates
-    for filename, content in BASE_HELM.items():
-        path = os.path.join(output_dir, filename)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(content)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python compose2helm.py <docker-compose.yml> <output-dir>")
-        sys.exit(1)
-
-    compose_file = sys.argv[1]
-    output_dir = sys.argv[2]
-
-    values = docker_compose_to_values(compose_file)
-    write_helm_chart(output_dir, values)
-    print(f"✅ Helm chart with Secrets (values-driven) generated in {output_dir}")
-
-
-```
 
 🔧 Example
 docker-compose.yml
+
 ```yaml
 services:
   db:
@@ -1441,12 +383,13 @@ stringData:
 ```
 🚀 Usage
 Install with default password:
-
+```bash
 helm install mydb ./mychart
+```
 Override password at install:
-
+```bash
 helm install mydb ./mychart --set services.db.secrets.POSTGRES_PASSWORD=myStrongPass
-
+```
 We’ll extend the generator so you can choose how secrets are managed:
 
 Inline Kubernetes Secret (default)
@@ -1454,7 +397,7 @@ Inline Kubernetes Secret (default)
 ExternalSecrets Operator (for AWS Secrets Manager, Vault, GCP, etc.)
 
 🔑 New Features
-Add a secretProvider option at the root of values.yaml:
+Added a secretProvider option at the root of values.yaml:
 ```yaml
 secretProvider: internal   # options: internal | external
 externalSecretStore: vault # optional: vault | aws | gcp
@@ -1463,54 +406,6 @@ If secretProvider=internal, we generate templates/secrets.yaml (like now).
 
 If secretProvider=external, we instead generate templates/externalsecret.yaml using the Kubernetes External Secrets API.
 
-🐍 Updated Python Script (relevant changes only)
-
-```python
-BASE_HELM.update({
-    "templates/externalsecret.yaml": """{{- if eq .Values.secretProvider "external" }}
-{{- range $name, $svc := .Values.services }}
-{{- if $svc.secrets }}
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: {{ $.Release.Name }}-{{ $name }}-externalsecret
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: SecretStore
-    name: {{ $.Values.externalSecretStore | default "default-secret-store" }}
-  target:
-    name: {{ $.Release.Name }}-{{ $name }}-secret
-  data:
-    {{- range $key, $_ := $svc.secrets }}
-    - secretKey: {{ $key }}
-      remoteRef:
-        key: {{ printf "%s/%s/%s" $.Release.Name $name $key | lower }}
-    {{- end }}
----
-{{- end }}
-{{- end }}
-{{- end }}
-"""
-})
-
-# When writing helm chart, skip internal secrets if external is chosen
-def write_helm_chart(output_dir, values):
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "templates"), exist_ok=True)
-
-    with open(os.path.join(output_dir, "values.yaml"), "w") as f:
-        yaml.dump(values, f, default_flow_style=False, sort_keys=False)
-
-    for filename, content in BASE_HELM.items():
-        if values.get("secretProvider", "internal") == "external" and filename.endswith("secrets.yaml"):
-            continue  # skip internal secrets
-        path = os.path.join(output_dir, filename)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(content)
-
-```
 
 
 📝 Example Values
@@ -1523,10 +418,11 @@ services:
     image: postgres:15
     secrets:
       POSTGRES_PASSWORD: changeme
+```
 → Generates Secret in templates/secrets.yaml.
 
 Case 2 – External Secrets (Vault)
-
+```yaml
 secretProvider: external
 externalSecretStore: vault
 
@@ -1535,8 +431,9 @@ services:
     image: postgres:15
     secrets:
       POSTGRES_PASSWORD: placeholder
+```
 → Generates an ExternalSecret in templates/externalsecret.yaml:
-
+```yaml
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
@@ -1590,54 +487,7 @@ SecretStore (per provider)
 
 ExternalSecret (as before)
 
-🐍 Updated Python Script (new parts)
 
-```python
-BASE_HELM.update({
-    "templates/secretstore.yaml": """{{- if eq .Values.secretProvider "external" }}
-apiVersion: external-secrets.io/v1beta1
-kind: SecretStore
-metadata:
-  name: {{ .Values.externalSecretStore | default "default-secret-store" }}
-spec:
-  {{- if eq .Values.externalSecretStore "vault" }}
-  provider:
-    vault:
-      server: {{ .Values.externalSecretConfig.vault.server | quote }}
-      path: {{ .Values.externalSecretConfig.vault.path | quote }}
-      version: v2
-      auth:
-        tokenSecretRef:
-          name: {{ .Values.externalSecretConfig.vault.auth.tokenSecretRef }}
-          key: token
-  {{- else if eq .Values.externalSecretStore "aws" }}
-  provider:
-    aws:
-      service: SecretsManager
-      region: {{ .Values.externalSecretConfig.aws.region | quote }}
-      auth:
-        secretRef:
-          accessKeyIDSecretRef:
-            name: {{ .Values.externalSecretConfig.aws.auth.secretRef }}
-            key: access-key
-          secretAccessKeySecretRef:
-            name: {{ .Values.externalSecretConfig.aws.auth.secretRef }}
-            key: secret-access-key
-  {{- else if eq .Values.externalSecretStore "gcp" }}
-  provider:
-    gcpsm:
-      projectID: {{ .Values.externalSecretConfig.gcp.projectID | quote }}
-      auth:
-        secretRef:
-          secretAccessKeySecretRef:
-            name: {{ .Values.externalSecretConfig.gcp.auth.secretRef }}
-            key: secret-access-key
-  {{- end }}
-{{- end }}
-"""
-})
-
-```
 📝 Example Values
 Case 1 – Vault
 
@@ -1734,50 +584,9 @@ externalSecretConfig:
 ```
 Script generates either a SecretStore (default) or a ClusterSecretStore if externalSecretScope=cluster.
 
-🐍 Updated Helm Template (new part in secretstore.yaml)
-```yaml
-{{- if eq .Values.secretProvider "external" }}
-apiVersion: external-secrets.io/v1beta1
-kind: {{ if eq .Values.externalSecretScope "cluster" }}ClusterSecretStore{{ else }}SecretStore{{ end }}
-metadata:
-  name: {{ .Values.externalSecretStore | default "default-secret-store" }}
-spec:
-  {{- if eq .Values.externalSecretStore "vault" }}
-  provider:
-    vault:
-      server: {{ .Values.externalSecretConfig.vault.server | quote }}
-      path: {{ .Values.externalSecretConfig.vault.path | quote }}
-      version: v2
-      auth:
-        tokenSecretRef:
-          name: {{ .Values.externalSecretConfig.vault.auth.tokenSecretRef }}
-          key: token
-  {{- else if eq .Values.externalSecretStore "aws" }}
-  provider:
-    aws:
-      service: SecretsManager
-      region: {{ .Values.externalSecretConfig.aws.region | quote }}
-      auth:
-        secretRef:
-          accessKeyIDSecretRef:
-            name: {{ .Values.externalSecretConfig.aws.auth.secretRef }}
-            key: access-key
-          secretAccessKeySecretRef:
-            name: {{ .Values.externalSecretConfig.aws.auth.secretRef }}
-            key: secret-access-key
-  {{- else if eq .Values.externalSecretStore "gcp" }}
-  provider:
-    gcpsm:
-      projectID: {{ .Values.externalSecretConfig.gcp.projectID | quote }}
-      auth:
-        secretRef:
-          secretAccessKeySecretRef:
-            name: {{ .Values.externalSecretConfig.gcp.auth.secretRef }}
-            key: secret-access-key
-  {{- end }}
-{{- end }}
 
-```
+
+
 📝 Example Values
 Case 1 – Namespace-scoped Vault (default)
 
@@ -1884,3 +693,36 @@ existingSecretStoreRef:
 
 👉 This makes the Helm chart safe for both self-contained deployments and shared enterprise setups.
 
+
+How the sectres-store.yaml template works:
+
+- Only renders if:
+
+secretProvider: external
+
+useExistingSecretStore: false
+
+- Switches between:
+
+SecretStore (namespace-scoped, default)
+
+ClusterSecretStore (cluster-scoped, if externalSecretScope: cluster)
+
+- Supports vault, aws, and gcp.
+
+If useExistingSecretStore: true, this template is skipped and your ExternalSecrets will point to the provided existing ref.
+
+And external.secrets.yaml template
+🔑 Features
+
+- Loops through each service (.Values.services) and generates an ExternalSecret if it has secrets.
+
+- Supports:
+
+- - Newly created SecretStore/ClusterSecretStore (when useExistingSecretStore: false)
+
+- - Pre-existing SecretStore/ClusterSecretStore (when useExistingSecretStore: true with existingSecretStoreRef)
+
+- Creates a Kubernetes Secret (target.name) for each service to mount/use.
+
+- Secret keys are normalized to release/service/key format for external reference.

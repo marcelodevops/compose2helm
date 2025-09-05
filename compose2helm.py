@@ -251,6 +251,49 @@ spec:
 {{- end }}
 """
 })
+BASE_HELM.update({
+    "templates/secretstore.yaml": """{{- if eq .Values.secretProvider "external" }}
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: {{ .Values.externalSecretStore | default "default-secret-store" }}
+spec:
+  {{- if eq .Values.externalSecretStore "vault" }}
+  provider:
+    vault:
+      server: {{ .Values.externalSecretConfig.vault.server | quote }}
+      path: {{ .Values.externalSecretConfig.vault.path | quote }}
+      version: v2
+      auth:
+        tokenSecretRef:
+          name: {{ .Values.externalSecretConfig.vault.auth.tokenSecretRef }}
+          key: token
+  {{- else if eq .Values.externalSecretStore "aws" }}
+  provider:
+    aws:
+      service: SecretsManager
+      region: {{ .Values.externalSecretConfig.aws.region | quote }}
+      auth:
+        secretRef:
+          accessKeyIDSecretRef:
+            name: {{ .Values.externalSecretConfig.aws.auth.secretRef }}
+            key: access-key
+          secretAccessKeySecretRef:
+            name: {{ .Values.externalSecretConfig.aws.auth.secretRef }}
+            key: secret-access-key
+  {{- else if eq .Values.externalSecretStore "gcp" }}
+  provider:
+    gcpsm:
+      projectID: {{ .Values.externalSecretConfig.gcp.projectID | quote }}
+      auth:
+        secretRef:
+          secretAccessKeySecretRef:
+            name: {{ .Values.externalSecretConfig.gcp.auth.secretRef }}
+            key: secret-access-key
+  {{- end }}
+{{- end }}
+"""
+})
 
 # When writing helm chart, skip internal secrets if external is chosen
 def write_helm_chart(output_dir, values):
