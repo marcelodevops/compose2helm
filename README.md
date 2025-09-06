@@ -1109,3 +1109,48 @@ stringData:
 - Supports both env vars and file mounts.
 
 - Compatible with internal Helm secrets or ExternalSecrets / Vault / AWS.
+
+### Example
+
+docker-compose.yaml
+```yaml
+version: "3.9"
+services:
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+    labels:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+
+
+```
+
+Generated values.yaml
+
+```yaml
+
+services:
+  web:
+    image: nginx
+    ports:
+      - containerPort: 80
+    ingress:
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: "/"
+      rules:
+        - host: web.local
+          path: /
+          port: 80
+      tls: []
+
+
+```
+
+- Any Compose service exposing port 80 or 443 gets an ingress by default.
+
+- Annotations from labels are automatically mapped.
+
+- Default host = <service>.local → you can override in values.yaml.
+
+- TLS left empty so you can fill with real certs (e.g., cert-manager).
