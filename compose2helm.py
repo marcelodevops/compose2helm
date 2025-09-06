@@ -18,6 +18,49 @@ def safe_mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
+def detect_ingress(name, svc):
+    ingress_conf = None
+    rules = []
+
+    # Case 1: Ports
+    for port in svc.get("ports", []):
+        if isinstance(port, dict):
+            container_port = port.get("target") or port.get("containerPort")
+            published = port.get("published")
+        else:
+            # Docker shorthand "80:80"
+            if ":" in str(port):
+                published, container_port = str(port).split(":")
+            else:
+                container_port = str(port)
+                published = None
+
+        container_port = int(container_port)
+
+        if container_port in [80, 443]:
+            rules.append({
+                "host": f"{name}.local",  # default host, override later in values.yaml
+                "path": "/",
+                "port": container_port
+            })
+
+    # Case 2: Labels
+    annotations = {}
+    for key, val in (svc.get("labels", {}) or {}).items():
+        if key.startswith("traefik.") or key.startswith("nginx.ingress."):
+            annotations[key] = val
+
+    if rules or annotations:
+        ingress_conf = {
+            "annotations": annotations,
+            "rules": rules,
+            "tls": []  # left empty, user can override
+        }
+
+    return ingress_conf
+
+
 # --------------------------
 # Compose Parser
 # --------------------------
@@ -42,7 +85,7 @@ def parse_compose(compose_file):
             "secretMounts": [],
             "ports": svc.get("ports", []),
             "storage": svc.get("volumes", []),
-            "volumeMounts": svc.get("volume_mounts", [])
+            "volumeMounts": svc.get("volume_mounts", []),
         }
 
         # Environment variables
@@ -52,7 +95,7 @@ def parse_compose(compose_file):
             else:
                 service_conf["env"][env] = val
 
-        # Service-level secrets → mounted as files
+        # Secrets (file-based)
         for sec in svc.get("secrets", []):
             if isinstance(sec, dict):
                 source = sec["source"]
@@ -72,6 +115,11 @@ def parse_compose(compose_file):
                 service_conf["secrets"][source.upper()] = f"<from-file:{sec_def['file']}>"
             else:
                 service_conf["secrets"][source.upper()] = "<to-be-generated>"
+
+        # Ingress detection
+        ingress_conf = detect_ingress(name, svc)
+        if ingress_conf:
+            service_conf["ingress"] = ingress_conf
 
         values["services"][name] = service_conf
 
